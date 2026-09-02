@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import logging
+
 from app.core.config import Settings
 from app.events.bus import EventBus
 from app.events.types import Event, EventNames
+from app.permissions.service import BusinessPermissions
 from app.repositories.core import CoreRepository
 from app.services.command_center import CommandCenter
 from app.services.orchestrator import ConversationOrchestrator
 from app.telegram.client import TelegramBotAPI
 from app.telegram.middleware import OwnerAuthenticationMiddleware
 from app.telegram.parser import ParsedUpdate
+
+logger = logging.getLogger(__name__)
 
 
 class TelegramUpdateService:
@@ -36,6 +41,12 @@ class TelegramUpdateService:
             connection = await repo.upsert_business_connection(
                 update.payload, expected_owner_id=int(self.settings.telegram_owner_id or 0)
             )
+            permissions = BusinessPermissions.from_rights(connection.rights)
+            logger.info(
+                "telegram business connection updated active=%s can_reply=%s",
+                connection.active,
+                permissions.can_reply,
+            )
             event_name = (
                 EventNames.TELEGRAM_BUSINESS_CONNECTED
                 if connection.active
@@ -46,6 +57,7 @@ class TelegramUpdateService:
             )
             return
         if update.kind == "business_message":
+            logger.info("telegram business message received")
             await self.orchestrator.handle_business_message(repo, update.payload)
             return
         if update.kind == "edited_business_message":
