@@ -30,8 +30,10 @@ class CommandCenter:
             )
         if command.intent == "help":
             return (
-                "Examples:\n"
+                "Telegram AI OS آماده است.\n\n"
+                "دستورهای مدیریت:\n"
                 "وضعیت\n"
+                "حالت 123456 ghost\n"
                 "حالت 123456 copilot\n"
                 "حالت 123456 autopilot\n"
                 "اتو ریپلای 123456 روشن\n"
@@ -64,6 +66,10 @@ class CommandCenter:
             chat.settings.requires_approval = not bool(command.enabled)
             await repo.session.flush()
             return f"Auto Reply چت {chat.telegram_chat_id} {'روشن' if command.enabled else 'خاموش'} شد."
+
+        if command.intent in {"recent_summary", "contact_query", "ask_ai"} and not self.settings.openai_api_key:
+            return "بخش AI هنوز فعال نشده است؛ OPENAI_API_KEY باید در تنظیمات سرور ثبت شود."
+
         if command.intent == "recent_summary":
             messages = await repo.recent_messages(limit=30)
             context = self._format_messages(messages)
