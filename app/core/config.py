@@ -24,6 +24,7 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str | None = None
     telegram_owner_id: int | None = None
+    telegram_admin_ids: str | None = None
     telegram_webhook_secret: str | None = None
     telegram_webhook_url: str | None = None
     railway_public_domain: str | None = None
@@ -43,6 +44,20 @@ class Settings(BaseSettings):
 
     app_name: str = "Telegram AI OS"
     app_version: str = "0.1.0"
+
+    @property
+    def admin_ids(self) -> set[int]:
+        ids: set[int] = set()
+        for item in (self.telegram_admin_ids or "").split(","):
+            item = item.strip()
+            if item.isdigit():
+                ids.add(int(item))
+        return ids
+
+    def is_admin(self, user_id: int | None) -> bool:
+        if user_id is None:
+            return False
+        return user_id == self.telegram_owner_id or user_id in self.admin_ids
 
     @field_validator("database_url")
     @classmethod
