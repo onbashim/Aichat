@@ -43,3 +43,9 @@ def configure_logging(level: str = "INFO") -> None:
     handler.setFormatter(JsonFormatter())
     root.addHandler(handler)
     root.setLevel(level.upper())
+
+    # HTTP client INFO logs can include complete request URLs. Telegram Bot API
+    # URLs contain the bot token, so keep third-party transport logging at
+    # WARNING while retaining our own structured application logs at INFO.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
