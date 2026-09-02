@@ -81,6 +81,7 @@ async def build_container(settings: Settings) -> Container:
         command_center = CommandCenter(settings, ai, telegram)
         owner_auth = OwnerAuthenticationMiddleware(
             owner_id=settings.telegram_owner_id,
+            admin_ids=settings.admin_ids,
             rate_limiter=SlidingWindowRateLimiter(
                 settings.owner_rate_limit_requests,
                 settings.owner_rate_limit_window_seconds,
@@ -167,37 +168,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if not value:
                 missing.append(name)
         if missing or container.engine is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"ready": False, "missing": missing},
-            )
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"ready": False, "missing": missing})
         try:
             async with container.engine.connect() as conn:
                 await conn.execute(text("SELECT 1"))
         except Exception as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"ready": False, "database": str(exc)},
-            ) from exc
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"ready": False, "database": str(exc)}) from exc
         return {"ready": True}
 
     @app.post("/telegram/webhook")
-    async def telegram_webhook(
-        request: Request,
-        x_telegram_bot_api_secret_token: str | None = Header(default=None),
-    ) -> dict[str, bool]:
+    async def telegram_webhook(request: Request, x_telegram_bot_api_secret_token: str | None = Header(default=None)) -> dict[str, bool]:
         container: Container = request.app.state.container
-        if not verify_webhook_secret(
-            x_telegram_bot_api_secret_token,
-            settings.telegram_webhook_secret,
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="invalid webhook secret"
-            )
+        if not verify_webhook_secret(x_telegram_bot_api_secret_token, settings.telegram_webhook_secret):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="invalid webhook secret")
         if container.session_factory is None or container.update_service is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="service not configured"
-            )
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="service not configured")
         body = await request.json()
         parsed = TelegramUpdateParser().parse(body)
         async with container.session_factory() as session:
