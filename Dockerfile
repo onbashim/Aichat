@@ -1,3 +1,4 @@
+# Railway production image
 FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
