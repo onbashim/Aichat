@@ -25,14 +25,41 @@ class TelegramBotAPI:
         return await self.call("getMe")
 
     async def set_webhook(self, url: str, secret_token: str) -> bool:
-        allowed_updates = ["message","business_connection","business_message","edited_business_message","deleted_business_messages"]
-        return bool(await self.call("setWebhook", {"url": url, "secret_token": secret_token, "allowed_updates": allowed_updates, "drop_pending_updates": False}))
+        allowed_updates = [
+            "message",
+            "business_connection",
+            "business_message",
+            "edited_business_message",
+            "deleted_business_messages",
+        ]
+        return bool(
+            await self.call(
+                "setWebhook",
+                {
+                    "url": url,
+                    "secret_token": secret_token,
+                    "allowed_updates": allowed_updates,
+                    "drop_pending_updates": False,
+                },
+            )
+        )
 
     async def send_bot_message(self, chat_id: int, text: str) -> dict[str, Any]:
         return await self.call("sendMessage", {"chat_id": chat_id, "text": text})
 
-    async def send_business_message(self, *, business_connection_id: str, chat_id: int, text: str, reply_to_message_id: int | None = None) -> dict[str, Any]:
-        payload: dict[str, Any] = {"business_connection_id": business_connection_id, "chat_id": chat_id, "text": text}
+    async def send_business_message(
+        self,
+        *,
+        business_connection_id: str,
+        chat_id: int,
+        text: str,
+        reply_to_message_id: int | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "business_connection_id": business_connection_id,
+            "chat_id": chat_id,
+            "text": text,
+        }
         if reply_to_message_id is not None:
             payload["reply_parameters"] = {"message_id": reply_to_message_id}
         return await self.call("sendMessage", payload)

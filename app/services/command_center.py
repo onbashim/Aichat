@@ -39,7 +39,9 @@ class CommandCenter:
                 "تایید <action-id> / رد <action-id>"
             )
         if command.intent in {"approve_action", "reject_action"}:
-            return await self._handle_action(repo, command.argument or "", approve=command.intent == "approve_action")
+            return await self._handle_action(
+                repo, command.argument or "", approve=command.intent == "approve_action"
+            )
         if command.intent == "set_mode":
             chat = await repo.get_chat_by_telegram_id(int(command.chat_id or 0))
             if chat is None:
@@ -71,12 +73,20 @@ class CommandCenter:
             return result.text
         if command.intent == "contact_query":
             token = self._guess_contact_token(text)
-            messages = await repo.search_contact_messages(token, limit=30) if token else await repo.recent_messages(30)
+            messages = (
+                await repo.search_contact_messages(token, limit=30)
+                if token
+                else await repo.recent_messages(30)
+            )
             context = self._format_messages(messages)
-            result = await self.ai.answer_command(text, context or "No matching messages.", trace_id=str(uuid4()))
+            result = await self.ai.answer_command(
+                text, context or "No matching messages.", trace_id=str(uuid4())
+            )
             return result.text
         messages = await repo.recent_messages(limit=20)
-        result = await self.ai.answer_command(text, self._format_messages(messages), trace_id=str(uuid4()))
+        result = await self.ai.answer_command(
+            text, self._format_messages(messages), trace_id=str(uuid4())
+        )
         return result.text
 
     async def _handle_action(self, repo: CoreRepository, action_id: str, *, approve: bool) -> str:

@@ -116,7 +116,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.container = container
         if container.telegram and settings.webhook_url and settings.telegram_webhook_secret:
             try:
-                await container.telegram.set_webhook(settings.webhook_url, settings.telegram_webhook_secret)
+                await container.telegram.set_webhook(
+                    settings.webhook_url, settings.telegram_webhook_secret
+                )
                 logger.info("telegram webhook configured")
             except Exception:
                 logger.exception("telegram webhook configuration failed")
@@ -179,9 +181,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             x_telegram_bot_api_secret_token,
             settings.telegram_webhook_secret,
         ):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="invalid webhook secret")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="invalid webhook secret"
+            )
         if container.session_factory is None or container.update_service is None:
-            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="service not configured")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="service not configured"
+            )
         body = await request.json()
         parsed = TelegramUpdateParser().parse(body)
         async with container.session_factory() as session:

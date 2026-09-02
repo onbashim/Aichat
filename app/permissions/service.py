@@ -12,7 +12,7 @@ class BusinessPermissions:
     can_delete_all_messages: bool = False
 
     @classmethod
-    def from_rights(cls, rights: dict[str, Any] | None) -> "BusinessPermissions":
+    def from_rights(cls, rights: dict[str, Any] | None) -> BusinessPermissions:
         rights = rights or {}
         return cls(
             can_reply=bool(rights.get("can_reply")),

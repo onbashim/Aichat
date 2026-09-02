@@ -12,11 +12,15 @@ class AIProvider(ABC):
 
 
 class OpenAIProvider(AIProvider):
-    def __init__(self, api_key: str, model: str, timeout_seconds: float = 30.0, max_retries: int = 2) -> None:
+    def __init__(
+        self, api_key: str, model: str, timeout_seconds: float = 30.0, max_retries: int = 2
+    ) -> None:
         from openai import AsyncOpenAI
 
         self.model = model
-        self._client = AsyncOpenAI(api_key=api_key, timeout=timeout_seconds, max_retries=max_retries)
+        self._client = AsyncOpenAI(
+            api_key=api_key, timeout=timeout_seconds, max_retries=max_retries
+        )
 
     async def generate(self, messages: list[AIMessage], *, trace_id: str) -> AIResult:
         response = await self._client.responses.create(
