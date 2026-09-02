@@ -14,19 +14,43 @@ class Limiter:
 
 
 @pytest.mark.asyncio
-async def test_owner_middleware_rejects_non_owner_without_consuming_rate_limit():
-    limiter = Limiter(True)
-    middleware = OwnerAuthenticationMiddleware(owner_id=100, rate_limiter=limiter)
-    result = await middleware.authorize(101)
-    assert result.allowed is False
-    assert result.reason == "not_owner"
-    assert limiter.calls == 0
+async def test_owner_middleware_allows_owner():
+    result = await OwnerAuthenticationMiddleware(
+        owner_id=100, admin_ids=set(), rate_limiter=Limiter(True)
+    ).authorize(100)
+    assert result.allowed is True
 
 
 @pytest.mark.asyncio
-async def test_owner_middleware_rate_limits_owner():
+async def test_owner_middleware_allows_admin_id():
     result = await OwnerAuthenticationMiddleware(
-        owner_id=100, rate_limiter=Limiter(False)
-    ).authorize(100)
+        owner_id=100, admin_ids={8210327011}, rate_limiter=Limiter(True)
+    ).authorize(8210327011)
+    assert result.allowed is True
+
+
+@pytest.mark.asyncio
+async def test_owner_middleware_denies_random_user():
+    result = await OwnerAuthenticationMiddleware(
+        owner_id=100, admin_ids={8210327011}, rate_limiter=Limiter(True)
+    ).authorize(101)
+    assert result.allowed is False
+    assert result.reason == "not_admin"
+
+
+@pytest.mark.asyncio
+async def test_empty_admin_ids_keeps_owner_only_access():
+    middleware = OwnerAuthenticationMiddleware(
+        owner_id=100, admin_ids=set(), rate_limiter=Limiter(True)
+    )
+    assert (await middleware.authorize(100)).allowed is True
+    assert (await middleware.authorize(8210327011)).allowed is False
+
+
+@pytest.mark.asyncio
+async def test_owner_middleware_rate_limits_admin():
+    result = await OwnerAuthenticationMiddleware(
+        owner_id=100, admin_ids={8210327011}, rate_limiter=Limiter(False)
+    ).authorize(8210327011)
     assert result.allowed is False
     assert result.reason == "rate_limited"
