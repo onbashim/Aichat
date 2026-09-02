@@ -114,6 +114,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         container = await build_container(settings)
         app.state.container = container
+        if container.telegram:
+            try:
+                me = await container.telegram.get_me()
+                logger.info(
+                    "telegram bot verified username=%s can_connect_to_business=%s",
+                    me.get("username"),
+                    me.get("can_connect_to_business"),
+                )
+            except Exception:
+                logger.exception("telegram bot verification failed")
         if container.telegram and settings.webhook_url and settings.telegram_webhook_secret:
             try:
                 await container.telegram.set_webhook(
