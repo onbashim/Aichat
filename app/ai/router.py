@@ -40,7 +40,7 @@ class AICommandRouter:
         lower = cleaned.casefold()
         if lower in {"status", "/status", "وضعیت", "وضعیت ربات"}:
             return RoutedCommand("status")
-        if lower in {"help", "/help", "راهنما", "کمک"}:
+        if lower in {"start", "/start", "help", "/help", "راهنما", "کمک"}:
             return RoutedCommand("help")
         for prefix, intent in (
             ("تایید ", "approve_action"),
