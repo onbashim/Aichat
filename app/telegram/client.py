@@ -15,10 +15,18 @@ class TelegramBotAPI:
 
     async def call(self, method: str, payload: dict[str, Any] | None = None) -> Any:
         response = await self._client.post(f"{self.base_url}/{method}", json=payload or {})
-        response.raise_for_status()
-        body = response.json()
-        if not body.get("ok"):
-            raise RuntimeError(f"Telegram API error: {body}")
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise RuntimeError(
+                f"Telegram API returned invalid JSON (status={response.status_code})"
+            ) from exc
+        if response.is_error or not body.get("ok"):
+            description = str(body.get("description") or "unknown Telegram API error")
+            error_code = body.get("error_code", response.status_code)
+            raise RuntimeError(
+                f"Telegram API error code={error_code}: {description}"
+            )
         return body.get("result")
 
     async def get_me(self) -> dict[str, Any]:
