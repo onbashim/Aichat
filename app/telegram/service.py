@@ -201,9 +201,15 @@ class TelegramUpdateService:
             await self.telegram.edit_bot_message(
                 int(chat_id), int(message_id), text, reply_markup=markup
             )
-        except Exception:
-            logger.exception(
-                "admin panel message edit failed callback=%s data=%s",
-                callback_id,
+        except Exception as exc:
+            logger.warning(
+                "admin panel edit failed; sending replacement data=%s error=%s",
                 data,
+                exc,
             )
+            try:
+                await self.telegram.send_bot_message(
+                    int(chat_id), text, reply_markup=markup
+                )
+            except Exception:
+                logger.exception("admin panel replacement message failed data=%s", data)
