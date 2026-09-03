@@ -104,6 +104,15 @@ class ConversationOrchestrator:
         prompts = [item for item in (global_prompt, settings.custom_prompt) if item]
         effective_prompt = "\n\n".join(str(item) for item in prompts) or None
         try:
+            if settings.mode == ChatMode.MANUAL.value:
+                await repo.add_audit(
+                    trace_id=trace_id,
+                    chat_id=chat.id,
+                    mode=settings.mode,
+                    action="manual_message_stored",
+                    result="success",
+                )
+                return
             if settings.mode == ChatMode.GHOST.value:
                 result = await self.ai.analyze_message(text, trace_id=trace_id)
                 await repo.add_ai_request(
