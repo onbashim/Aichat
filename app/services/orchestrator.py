@@ -203,11 +203,18 @@ class ConversationOrchestrator:
                             ]
                         ]
                     }
-                    await self.telegram.send_bot_message(
-                        self.settings.telegram_owner_id,
-                        notice,
-                        reply_markup=markup,
-                    )
+                    try:
+                        await self.telegram.send_bot_message(
+                            self.settings.telegram_owner_id,
+                            notice,
+                            reply_markup=markup,
+                        )
+                    except TypeError:
+                        # Backward-compatible adapter path for legacy Telegram clients.
+                        await self.telegram.send_bot_message(
+                            self.settings.telegram_owner_id,
+                            notice,
+                        )
                 await repo.add_audit(
                     trace_id=trace_id,
                     chat_id=chat.id,
