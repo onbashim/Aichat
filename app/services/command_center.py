@@ -8,6 +8,7 @@ from app.ai.router import AICommandRouter
 from app.core.config import Settings
 from app.database.models import ActionStatus
 from app.permissions.service import BusinessPermissions
+from app.repositories.chat_control import resolve_chat_for_owner
 from app.repositories.core import CoreRepository
 from app.telegram.client import TelegramBotAPI
 
@@ -45,9 +46,17 @@ class CommandCenter:
                 repo, command.argument or "", approve=command.intent == "approve_action"
             )
         if command.intent == "set_mode":
-            chat = await repo.get_chat_by_telegram_id(int(command.chat_id or 0))
+            chat_id = int(command.chat_id or 0)
+            chat = await resolve_chat_for_owner(
+                repo,
+                telegram_chat_id=chat_id,
+                owner_telegram_user_id=int(self.settings.telegram_owner_id or 0),
+            )
             if chat is None:
-                return "این Chat هنوز در دیتابیس دیده نشده است."
+                return (
+                    "Business Connection فعال برای این اکانت پیدا نشد. "
+                    "اتصال Telegram Business را یک‌بار قطع و وصل کن."
+                )
             if command.mode not in {"ghost", "copilot", "autopilot"}:
                 return "Mode نامعتبر است."
             chat.settings.mode = command.mode
@@ -55,11 +64,24 @@ class CommandCenter:
                 chat.settings.auto_reply = False
                 chat.settings.requires_approval = True
             await repo.session.flush()
-            return f"Mode چت {chat.telegram_chat_id} روی {command.mode} تنظیم شد."
+            response = f"Mode چت {chat.telegram_chat_id} روی {command.mode} تنظیم شد."
+            if command.mode == "autopilot" and not chat.settings.auto_reply:
+                response += (
+                    f"\nبرای فعال شدن پاسخ خودکار: اتو ریپلای {chat.telegram_chat_id} روشن"
+                )
+            return response
         if command.intent == "set_autoreply":
-            chat = await repo.get_chat_by_telegram_id(int(command.chat_id or 0))
+            chat_id = int(command.chat_id or 0)
+            chat = await resolve_chat_for_owner(
+                repo,
+                telegram_chat_id=chat_id,
+                owner_telegram_user_id=int(self.settings.telegram_owner_id or 0),
+            )
             if chat is None:
-                return "این Chat هنوز در دیتابیس دیده نشده است."
+                return (
+                    "Business Connection فعال برای این اکانت پیدا نشد. "
+                    "اتصال Telegram Business را یک‌بار قطع و وصل کن."
+                )
             if command.enabled and chat.settings.mode != "autopilot":
                 return "برای Auto Reply ابتدا Mode چت را روی autopilot قرار بده."
             chat.settings.auto_reply = bool(command.enabled)
