@@ -12,5 +12,11 @@ def test_admin_panel_home_is_persian_inline_menu():
 
     assert "پنل مدیریت" in text
     buttons = [button for row in markup["inline_keyboard"] for button in row]
-    assert any(button["callback_data"] == "admin:chats" for button in buttons)
-    assert any(button["callback_data"] == "admin:status" for button in buttons)
+    callbacks = {button["callback_data"] for button in buttons}
+    assert "admin:chats" in callbacks
+    assert "admin:status" in callbacks
+    assert "admin:channels" in callbacks
+    assert "admin:ai" in callbacks
+    assert "admin:prompt" in callbacks
+    assert "admin:reports" in callbacks
+    assert "admin:audit" in callbacks
