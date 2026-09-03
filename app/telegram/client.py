@@ -31,6 +31,7 @@ class TelegramBotAPI:
             "business_message",
             "edited_business_message",
             "deleted_business_messages",
+            "callback_query",
         ]
         return bool(
             await self.call(
@@ -44,8 +45,49 @@ class TelegramBotAPI:
             )
         )
 
-    async def send_bot_message(self, chat_id: int, text: str) -> dict[str, Any]:
-        return await self.call("sendMessage", {"chat_id": chat_id, "text": text})
+    async def send_bot_message(
+        self,
+        chat_id: int,
+        text: str,
+        *,
+        reply_markup: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"chat_id": chat_id, "text": text}
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
+        return await self.call("sendMessage", payload)
+
+    async def edit_bot_message(
+        self,
+        chat_id: int,
+        message_id: int,
+        text: str,
+        *,
+        reply_markup: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": text,
+        }
+        if reply_markup is not None:
+            payload["reply_markup"] = reply_markup
+        return await self.call("editMessageText", payload)
+
+    async def answer_callback_query(
+        self,
+        callback_query_id: str,
+        *,
+        text: str | None = None,
+        show_alert: bool = False,
+    ) -> bool:
+        payload: dict[str, Any] = {
+            "callback_query_id": callback_query_id,
+            "show_alert": show_alert,
+        }
+        if text:
+            payload["text"] = text
+        return bool(await self.call("answerCallbackQuery", payload))
 
     async def send_business_message(
         self,
