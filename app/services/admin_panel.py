@@ -85,7 +85,10 @@ class AdminPanel:
     async def chats(self, repo: CoreRepository) -> tuple[str, dict[str, Any]]:
         chats = await repo.list_chats(limit=30)
         rows: list[list[dict[str, str]]] = [
-            [_button("➕ افزودن Chat", "admin:add_chat")]
+            [
+                _button("➕ افزودن Chat", "admin:add_chat"),
+                _button("🔍 جستجوی Chat", "admin:search_chat"),
+            ]
         ]
         for chat in chats:
             settings = chat.settings
@@ -158,6 +161,7 @@ class AdminPanel:
                         f"admin:enabled:{chat.id}:{'off' if s.enabled else 'on'}",
                     )
                 ],
+                [_button("❌ حذف Chat", f"admin:chat_delete_confirm:{chat.id}")],
                 [_button("⬅️ لیست چت‌ها", "admin:chats")],
             ]
         )
@@ -380,6 +384,13 @@ class AdminPanel:
                     "Business Connection فعال پیدا نشد. اتصال Telegram Business را بررسی کن.",
                     _keyboard([[_button("⬅️ بازگشت", "admin:chats")]]),
                 )
+            if chat.settings is not None:
+                chat.settings.enabled = True
+                chat.settings.mode = ChatMode.AUTOPILOT.value
+                chat.settings.auto_reply = True
+                chat.settings.requires_approval = False
+                chat.settings.memory_enabled = True
+                await repo.session.flush()
             await repo.clear_admin_session(telegram_user_id)
             await repo.add_audit(
                 trace_id=f"admin-add-chat:{chat.id}",
@@ -391,6 +402,20 @@ class AdminPanel:
             )
             detail, markup = await self.chat_detail(repo, chat.id)
             return True, "Chat اضافه شد ✅\n\n" + detail, markup
+
+        if session.state == "awaiting_chat_search":
+            results = await repo.search_chats(value, limit=20)
+            await repo.clear_admin_session(telegram_user_id)
+            rows: list[list[dict[str, str]]] = []
+            for chat in results:
+                name = chat.title or chat.first_name or chat.username or str(chat.telegram_chat_id)
+                rows.append([_button(name, f"admin:chat:{chat.id}")])
+            rows.append([_button("⬅️ بازگشت", "admin:chats")])
+            return (
+                True,
+                f"🔍 نتیجه جستجو\n\n{len(results)} Chat پیدا شد.",
+                _keyboard(rows),
+            )
 
         if session.state == "awaiting_chat_prompt":
             chat_id = int(session.payload.get("chat_id", 0))
@@ -439,6 +464,12 @@ class AdminPanel:
                 "➕ افزودن Chat\n\nلطفاً Chat ID را ارسال کن.\nبرای لغو: «لغو»",
                 _keyboard([[_button("⬅️ لغو", "admin:chats")]]),
             )
+        if data == "admin:search_chat":
+            await repo.set_admin_session(owner_id, "awaiting_chat_search")
+            return (
+                "🔍 جستجوی Chat\n\nنام، username یا Chat ID را ارسال کن.",
+                _keyboard([[_button("⬅️ لغو", "admin:chats")]]),
+            )
         if data.startswith("admin:chatprompt:"):
             try:
                 chat_id = int(data.rsplit(":", 1)[1])
@@ -449,6 +480,40 @@ class AdminPanel:
                 "📝 Prompt اختصاصی Chat\n\nPrompt جدید را ارسال کن.\nبرای پاک کردن Prompt فقط «-» بفرست.",
                 _keyboard([[_button("⬅️ لغو", f"admin:chat:{chat_id}")]]),
             )
+        if data.startswith("admin:chat_delete_confirm:"):
+            try:
+                chat_id = int(data.rsplit(":", 1)[1])
+            except ValueError:
+                return await self.chats(repo)
+            chat = await repo.get_chat_with_settings(chat_id)
+            if chat is None:
+                return await self.chats(repo)
+            name = chat.title or chat.first_name or chat.username or str(chat.telegram_chat_id)
+            return (
+                f"❌ حذف Chat\n\nآیا از حذف «{name}» مطمئنی؟\n"
+                "پیام‌ها و تنظیمات وابسته این Chat نیز از دیتابیس حذف می‌شوند.",
+                _keyboard(
+                    [
+                        [_button("✅ بله، حذف شود", f"admin:chat_delete:{chat_id}:yes")],
+                        [_button("⬅️ انصراف", f"admin:chat:{chat_id}")],
+                    ]
+                ),
+            )
+        if data.startswith("admin:chat_delete:"):
+            parts = data.split(":")
+            if len(parts) == 4 and parts[3] == "yes":
+                try:
+                    chat_id = int(parts[2])
+                except ValueError:
+                    return await self.chats(repo)
+                await repo.delete_chat(chat_id)
+                await repo.add_audit(
+                    trace_id=f"admin-delete-chat:{chat_id}",
+                    action="admin_chat_deleted",
+                    result="success",
+                    details={"chat_id": chat_id},
+                )
+            return await self.chats(repo)
         if data.startswith("admin:chat:"):
             try:
                 return await self.chat_detail(repo, int(data.rsplit(":", 1)[1]))
