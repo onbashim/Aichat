@@ -104,9 +104,28 @@ class CoreRepository:
     async def get_chat_by_telegram_id(self, telegram_chat_id: int) -> Chat | None:
         return await self.session.scalar(
             select(Chat)
+            .options(selectinload(Chat.settings))
             .where(Chat.telegram_chat_id == telegram_chat_id)
             .order_by(desc(Chat.updated_at))
             .limit(1)
+        )
+
+    async def get_chat_with_settings(self, chat_id: int) -> Chat | None:
+        return await self.session.scalar(
+            select(Chat)
+            .options(selectinload(Chat.settings))
+            .where(Chat.id == chat_id)
+            .limit(1)
+        )
+
+    async def list_chats(self, limit: int = 20) -> list[Chat]:
+        return list(
+            await self.session.scalars(
+                select(Chat)
+                .options(selectinload(Chat.settings))
+                .order_by(desc(Chat.updated_at))
+                .limit(limit)
+            )
         )
 
     async def save_message(self, chat: Chat, payload: dict[str, Any], *, direction: str) -> Message:
