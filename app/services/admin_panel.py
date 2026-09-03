@@ -348,6 +348,7 @@ class AdminPanel:
                             f"admin:channel_ai:{channel.id}:{'off' if channel.ai_enabled else 'on'}",
                         )
                     ],
+                    [_button("✏️ ویرایش نام", f"admin:channel_title:{channel.id}")],
                     [_button("❌ حذف کانال", f"admin:channel_delete:{channel.id}:yes")],
                     [_button("⬅️ بازگشت", "admin:channels")],
                 ]
@@ -436,6 +437,18 @@ class AdminPanel:
             prompt_text, markup = await self.prompt_menu(repo)
             return True, "Prompt اصلی ذخیره شد ✅\n\n" + prompt_text, markup
 
+        if session.state == "awaiting_channel_title":
+            channel_id = int(session.payload.get("channel_id", 0))
+            channel = await repo.get_channel(channel_id)
+            if channel is None:
+                await repo.clear_admin_session(telegram_user_id)
+                return True, "کانال پیدا نشد.", None
+            channel.title = value[:255]
+            await repo.session.flush()
+            await repo.clear_admin_session(telegram_user_id)
+            detail, markup = await self.channel_detail(repo, channel.id)
+            return True, "نام کانال ذخیره شد ✅\n\n" + detail, markup
+
         if session.state == "awaiting_channel_id":
             try:
                 telegram_chat_id = int(value)
@@ -452,6 +465,20 @@ class AdminPanel:
     async def render_callback(
         self, repo: CoreRepository, data: str, *, owner_id: int
     ) -> tuple[str, dict[str, Any]]:
+        navigation = {
+            "admin:home",
+            "admin:status",
+            "admin:chats",
+            "admin:channels",
+            "admin:ai",
+            "admin:prompt",
+            "admin:reports",
+            "admin:audit",
+            "admin:security",
+        }
+        if data in navigation or data.startswith(("admin:chat:", "admin:channel:")):
+            await repo.clear_admin_session(owner_id)
+
         if data == "admin:home":
             return self.home()
         if data == "admin:status":
@@ -582,6 +609,18 @@ class AdminPanel:
             return (
                 "➕ افزودن کانال\n\nChannel ID را ارسال کن.\nبرای لغو: «لغو»",
                 _keyboard([[_button("⬅️ لغو", "admin:channels")]]),
+            )
+        if data.startswith("admin:channel_title:"):
+            try:
+                channel_id = int(data.rsplit(":", 1)[1])
+            except ValueError:
+                return await self.channels(repo)
+            await repo.set_admin_session(
+                owner_id, "awaiting_channel_title", {"channel_id": channel_id}
+            )
+            return (
+                "✏️ ویرایش نام کانال\n\nنام جدید را ارسال کن.",
+                _keyboard([[_button("⬅️ لغو", f"admin:channel:{channel_id}")]]),
             )
         if data.startswith("admin:channel:"):
             try:
