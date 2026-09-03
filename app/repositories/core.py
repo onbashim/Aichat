@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import desc, func, select, update
+from sqlalchemy import desc, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -133,42 +133,20 @@ class CoreRepository:
 
     async def search_chats(self, query: str, limit: int = 20) -> list[Chat]:
         cleaned = query.strip()
-        conditions = []
+        pattern = f"%{cleaned}%"
+        conditions = [
+            Chat.title.ilike(pattern),
+            Chat.first_name.ilike(pattern),
+            Chat.last_name.ilike(pattern),
+            Chat.username.ilike(pattern),
+        ]
         if cleaned.lstrip("-").isdigit():
             conditions.append(Chat.telegram_chat_id == int(cleaned))
-        pattern = f"%{cleaned}%"
-        conditions.extend(
-            [
-                Chat.title.ilike(pattern),
-                Chat.first_name.ilike(pattern),
-                Chat.last_name.ilike(pattern),
-                Chat.username.ilike(pattern),
-            ]
-        )
         return list(
             await self.session.scalars(
                 select(Chat)
                 .options(selectinload(Chat.settings))
-                .where(*([conditions[0]] if len(conditions) == 1 else []))
-                .order_by(desc(Chat.updated_at))
-                .limit(limit)
-            )
-        ) if len(conditions) == 1 else list(
-            await self.session.scalars(
-                select(Chat)
-                .options(selectinload(Chat.settings))
-                .where(
-                    conditions[0]
-                    | conditions[1]
-                    | conditions[2]
-                    | conditions[3]
-                    | conditions[4]
-                    if len(conditions) == 5
-                    else conditions[0]
-                    | conditions[1]
-                    | conditions[2]
-                    | conditions[3]
-                )
+                .where(or_(*conditions))
                 .order_by(desc(Chat.updated_at))
                 .limit(limit)
             )
