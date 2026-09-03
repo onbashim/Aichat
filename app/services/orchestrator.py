@@ -58,6 +58,13 @@ class ConversationOrchestrator:
             connection.owner_telegram_user_id
         )
         direction = "outgoing" if is_outgoing else "incoming"
+        upsert_user = getattr(repo, "upsert_user", None)
+        if upsert_user is not None and sender.get("id") is not None:
+            await upsert_user(
+                sender,
+                is_owner=int(sender.get("id", 0))
+                == int(connection.owner_telegram_user_id),
+            )
         if edited:
             await repo.mark_message_edited(payload)
             await self.event_bus.publish(
@@ -93,6 +100,8 @@ class ConversationOrchestrator:
             global_tone = "natural"
             global_language = "auto"
             response_length = "medium"
+            creativity = "medium"
+            error_notifications = True
             global_prompt_enabled = True
             global_prompt = ""
             ai_automation_enabled = self.settings.ai_automation_enabled
@@ -101,6 +110,8 @@ class ConversationOrchestrator:
             global_tone = await get_system_setting("ai_tone", "natural")
             global_language = await get_system_setting("ai_language", "auto")
             response_length = await get_system_setting("ai_length", "medium")
+            creativity = await get_system_setting("ai_creativity", "medium")
+            error_notifications = await get_system_setting("error_notifications", True)
             global_prompt_enabled = await get_system_setting("global_prompt_enabled", True)
             global_prompt = (
                 await get_system_setting("global_prompt", "")
@@ -127,6 +138,16 @@ class ConversationOrchestrator:
                     mode=settings.mode,
                     action="manual_message_stored",
                     result="success",
+                )
+                return
+            if not self.settings.openai_api_key:
+                await repo.add_audit(
+                    trace_id=trace_id,
+                    chat_id=chat.id,
+                    mode=settings.mode,
+                    action="ai_unavailable",
+                    result="blocked",
+                    details={"reason": "openai_api_key_missing"},
                 )
                 return
             if settings.mode == ChatMode.GHOST.value:
@@ -156,6 +177,7 @@ class ConversationOrchestrator:
                 custom_prompt=effective_prompt,
                 memory_context=memory_context,
                 response_length=str(response_length),
+                creativity=str(creativity),
             )
             await repo.add_ai_request(
                 trace_id=trace_id,
@@ -276,3 +298,13 @@ class ConversationOrchestrator:
                 result="failed",
                 error=str(exc),
             )
+            if error_notifications and self.settings.telegram_owner_id:
+                try:
+                    await self.telegram.send_bot_message(
+                        self.settings.telegram_owner_id,
+                        "⚠️ خطای عملیاتی AI\n\n"
+                        f"Chat ID: {chat.telegram_chat_id}\n"
+                        "جزئیات در Audit Log ثبت شد.",
+                    )
+                except Exception:
+                    logger.exception("failed to send owner error notification")

@@ -34,11 +34,14 @@ class AdminPanel:
                 [
                     [_button("🤖 وضعیت سیستم", "admin:status")],
                     [_button("💬 مدیریت چت‌ها", "admin:chats")],
+                    [_button("👥 مدیریت کاربران", "admin:users")],
                     [_button("📢 مدیریت کانال‌ها", "admin:channels")],
                     [_button("🧠 تنظیمات AI", "admin:ai")],
                     [_button("📝 Prompt اصلی", "admin:prompt")],
                     [_button("📊 گزارش‌ها", "admin:reports")],
                     [_button("🧾 Audit Log", "admin:audit")],
+                    [_button("🔔 اعلان‌ها", "admin:notifications")],
+                    [_button("⚙️ تنظیمات پیشرفته", "admin:advanced")],
                     [_button("🔐 امنیت", "admin:security")],
                 ]
             ),
@@ -220,12 +223,14 @@ class AdminPanel:
         tone = await repo.get_system_setting("ai_tone", "natural")
         language = await repo.get_system_setting("ai_language", "auto")
         length = await repo.get_system_setting("ai_length", "medium")
+        creativity = await repo.get_system_setting("ai_creativity", "medium")
         return (
             "🧠 تنظیمات AI\n\n"
-            f"Model: {self.settings.openai_model}\n"
-            f"Tone پیش‌فرض: {tone}\n"
-            f"Language پیش‌فرض: {language}\n"
-            f"طول پاسخ: {length}",
+            f"مدل: {self.settings.openai_model}\n"
+            f"لحن پیش‌فرض: {tone}\n"
+            f"زبان پیش‌فرض: {language}\n"
+            f"طول پاسخ: {length}\n"
+            f"خلاقیت: {creativity}",
             _keyboard(
                 [
                     [
@@ -242,6 +247,11 @@ class AdminPanel:
                         _button("کوتاه", "admin:aiset:length:short"),
                         _button("متوسط", "admin:aiset:length:medium"),
                         _button("کامل", "admin:aiset:length:full"),
+                    ],
+                    [
+                        _button("خلاقیت کم", "admin:aiset:creativity:low"),
+                        _button("متوسط", "admin:aiset:creativity:medium"),
+                        _button("زیاد", "admin:aiset:creativity:high"),
                     ],
                     [_button("📝 Prompt اصلی", "admin:prompt")],
                     [_button("⬅️ بازگشت", "admin:home")],
@@ -355,6 +365,89 @@ class AdminPanel:
             ),
         )
 
+
+    async def users(self, repo: CoreRepository) -> tuple[str, dict[str, Any]]:
+        users = await repo.list_users(limit=50)
+        rows: list[list[dict[str, str]]] = []
+        for user in users:
+            name = " ".join(
+                part for part in (user.first_name, user.last_name) if part
+            ).strip()
+            if not name:
+                name = user.username or str(user.telegram_user_id)
+            badge = "👑" if user.is_owner else "👤"
+            rows.append([_button(f"{badge} {name}", f"admin:user:{user.id}")])
+        rows.append([_button("⬅️ بازگشت", "admin:home")])
+        return (
+            f"👥 مدیریت کاربران\n\nتعداد کاربران ثبت‌شده: {len(users)}",
+            _keyboard(rows),
+        )
+
+    async def user_detail(
+        self, repo: CoreRepository, user_id: int
+    ) -> tuple[str, dict[str, Any]]:
+        user = await repo.get_user(user_id)
+        if user is None:
+            return "کاربر پیدا نشد.", _keyboard([[_button("⬅️ بازگشت", "admin:users")]])
+        name = " ".join(
+            part for part in (user.first_name, user.last_name) if part
+        ).strip() or "بدون نام"
+        return (
+            "👤 اطلاعات کاربر\n\n"
+            f"نام: {name}\n"
+            f"Telegram ID: {user.telegram_user_id}\n"
+            f"Username: @{user.username if user.username else '-'}\n"
+            f"نقش: {'مالک اصلی' if user.is_owner else 'کاربر'}",
+            _keyboard([[_button("⬅️ بازگشت", "admin:users")]]),
+        )
+
+    async def notifications(self, repo: CoreRepository) -> tuple[str, dict[str, Any]]:
+        enabled = await repo.get_system_setting("error_notifications", True)
+        return (
+            "🔔 اعلان‌ها\n\n"
+            f"اعلان خطاهای عملیاتی: {'🟢 فعال' if enabled else '🔴 خاموش'}\n"
+            "خطاهای واقعی AI/Telegram برای Owner ارسال می‌شوند؛ "
+            "خطاهای تنظیمات ناقص به Audit Log می‌روند.",
+            _keyboard(
+                [
+                    [
+                        _button(
+                            "🔴 خاموش کردن" if enabled else "🟢 فعال کردن",
+                            f"admin:notify_errors:{'off' if enabled else 'on'}",
+                        )
+                    ],
+                    [_button("⬅️ بازگشت", "admin:home")],
+                ]
+            ),
+        )
+
+    async def advanced(self, repo: CoreRepository) -> tuple[str, dict[str, Any]]:
+        ai_enabled = await repo.get_system_setting(
+            "ai_automation_enabled", self.settings.ai_automation_enabled
+        )
+        autopilot_enabled = await repo.get_system_setting(
+            "autopilot_enabled", self.settings.autopilot_enabled
+        )
+        memory_default = await repo.get_system_setting("memory_default", True)
+        return (
+            "⚙️ تنظیمات پیشرفته\n\n"
+            f"AI Automation: {'فعال' if ai_enabled else 'خاموش'}\n"
+            f"Autopilot Global: {'فعال' if autopilot_enabled else 'خاموش'}\n"
+            f"Memory پیش‌فرض: {'فعال' if memory_default else 'خاموش'}",
+            _keyboard(
+                [
+                    [
+                        _button(
+                            "Memory پیش‌فرض خاموش" if memory_default else "Memory پیش‌فرض روشن",
+                            f"admin:memory_default:{'off' if memory_default else 'on'}",
+                        )
+                    ],
+                    [_button("🤖 وضعیت و کلیدهای اصلی", "admin:status")],
+                    [_button("⬅️ بازگشت", "admin:home")],
+                ]
+            ),
+        )
+
     async def handle_input(
         self, repo: CoreRepository, telegram_user_id: int, text: str
     ) -> tuple[bool, str, dict[str, Any] | None]:
@@ -386,11 +479,12 @@ class AdminPanel:
                     _keyboard([[_button("⬅️ بازگشت", "admin:chats")]]),
                 )
             if chat.settings is not None:
+                memory_default = await repo.get_system_setting("memory_default", True)
                 chat.settings.enabled = True
                 chat.settings.mode = ChatMode.AUTOPILOT.value
                 chat.settings.auto_reply = True
                 chat.settings.requires_approval = False
-                chat.settings.memory_enabled = True
+                chat.settings.memory_enabled = bool(memory_default)
                 await repo.session.flush()
             await repo.clear_admin_session(telegram_user_id)
             await repo.add_audit(
@@ -470,10 +564,13 @@ class AdminPanel:
             "admin:status",
             "admin:chats",
             "admin:channels",
+            "admin:users",
             "admin:ai",
             "admin:prompt",
             "admin:reports",
             "admin:audit",
+            "admin:notifications",
+            "admin:advanced",
             "admin:security",
         }
         if data in navigation or data.startswith(("admin:chat:", "admin:channel:")):
@@ -485,6 +582,13 @@ class AdminPanel:
             return await self.status(repo)
         if data == "admin:chats":
             return await self.chats(repo)
+        if data == "admin:users":
+            return await self.users(repo)
+        if data.startswith("admin:user:"):
+            try:
+                return await self.user_detail(repo, int(data.rsplit(":", 1)[1]))
+            except ValueError:
+                return await self.users(repo)
         if data == "admin:add_chat":
             await repo.set_admin_session(owner_id, "awaiting_chat_id")
             return (
@@ -564,7 +668,12 @@ class AdminPanel:
             parts = data.split(":")
             if len(parts) == 4:
                 kind, value = parts[2], parts[3]
-                key = {"tone": "ai_tone", "language": "ai_language", "length": "ai_length"}.get(kind)
+                key = {
+                    "tone": "ai_tone",
+                    "language": "ai_language",
+                    "length": "ai_length",
+                    "creativity": "ai_creativity",
+                }.get(kind)
                 if key:
                     await repo.set_system_setting(key, value)
             return await self.ai_menu(repo)
@@ -647,6 +756,17 @@ class AdminPanel:
                     return await self.channels(repo)
                 await repo.session.flush()
                 return await self.channel_detail(repo, channel_id)
+
+        if data == "admin:notifications":
+            return await self.notifications(repo)
+        if data.startswith("admin:notify_errors:"):
+            await repo.set_system_setting("error_notifications", data.endswith(":on"))
+            return await self.notifications(repo)
+        if data == "admin:advanced":
+            return await self.advanced(repo)
+        if data.startswith("admin:memory_default:"):
+            await repo.set_system_setting("memory_default", data.endswith(":on"))
+            return await self.advanced(repo)
 
         if data == "admin:security":
             return (

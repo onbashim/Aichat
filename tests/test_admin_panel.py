@@ -20,3 +20,7 @@ def test_admin_panel_home_is_persian_inline_menu():
     assert "admin:prompt" in callbacks
     assert "admin:reports" in callbacks
     assert "admin:audit" in callbacks
+
+    assert "admin:users" in callbacks
+    assert "admin:notifications" in callbacks
+    assert "admin:advanced" in callbacks

@@ -24,6 +24,7 @@ async def test_draft_reply_includes_response_length_and_context():
         custom_prompt="قیمت را دقیق بگو",
         memory_context="نام مشتری: علی",
         response_length="short",
+        creativity="high",
     )
 
     assert provider.messages is not None
@@ -31,5 +32,6 @@ async def test_draft_reply_includes_response_length_and_context():
     assert "Tone: friendly" in user
     assert "Language: fa" in user
     assert "Response length: short" in user
+    assert "Creativity: high" in user
     assert "قیمت را دقیق بگو" in user
     assert "نام مشتری: علی" in user

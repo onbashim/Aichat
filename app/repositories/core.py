@@ -432,6 +432,16 @@ class CoreRepository:
             )
         )
 
+    async def list_users(self, limit: int = 50) -> list[User]:
+        return list(
+            await self.session.scalars(
+                select(User).order_by(desc(User.updated_at)).limit(limit)
+            )
+        )
+
+    async def get_user(self, user_id: int) -> User | None:
+        return await self.session.get(User, user_id)
+
     async def recent_messages(self, limit: int = 30) -> list[Message]:
         return list(
             await self.session.scalars(
