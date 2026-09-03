@@ -28,7 +28,7 @@ class RoutedCommand:
 
 class AICommandRouter:
     MODE_RE = re.compile(
-        r"(?:حالت|mode).*?(?P<chat>-?\d+).*?(?P<mode>ghost|copilot|autopilot)", re.I
+        r"(?:حالت|mode).*?(?P<chat>-?\d+).*?(?P<mode>manual|ghost|copilot|autopilot)", re.I
     )
     AUTO_RE = re.compile(
         r"(?:auto\s*reply|اتو\s*ریپلای|پاسخ\s*خودکار).*?(?P<chat>-?\d+).*?(?P<state>روشن|خاموش|on|off)",

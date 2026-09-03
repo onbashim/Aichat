@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import desc, select, update
+from sqlalchemy import desc, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -12,13 +12,16 @@ from sqlalchemy.orm import selectinload
 from app.database.models import (
     Action,
     ActionStatus,
+    AdminSession,
     AIRequest,
     AuditLog,
     Chat,
     ChatSettings,
+    ManagedChannel,
     Memory,
     Message,
     ProcessedUpdate,
+    SystemSetting,
     TelegramBusinessConnection,
     User,
 )
@@ -127,6 +130,35 @@ class CoreRepository:
                 .limit(limit)
             )
         )
+
+    async def search_chats(self, query: str, limit: int = 20) -> list[Chat]:
+        cleaned = query.strip()
+        pattern = f"%{cleaned}%"
+        conditions = [
+            Chat.title.ilike(pattern),
+            Chat.first_name.ilike(pattern),
+            Chat.last_name.ilike(pattern),
+            Chat.username.ilike(pattern),
+        ]
+        if cleaned.lstrip("-").isdigit():
+            conditions.append(Chat.telegram_chat_id == int(cleaned))
+        return list(
+            await self.session.scalars(
+                select(Chat)
+                .options(selectinload(Chat.settings))
+                .where(or_(*conditions))
+                .order_by(desc(Chat.updated_at))
+                .limit(limit)
+            )
+        )
+
+    async def delete_chat(self, chat_id: int) -> bool:
+        chat = await self.get_chat_with_settings(chat_id)
+        if chat is None:
+            return False
+        await self.session.delete(chat)
+        await self.session.flush()
+        return True
 
     async def save_message(self, chat: Chat, payload: dict[str, Any], *, direction: str) -> Message:
         existing = await self.session.scalar(
@@ -294,6 +326,111 @@ class CoreRepository:
             )
         )
         await self.session.flush()
+
+
+    async def get_system_setting(self, key: str, default: Any = None) -> Any:
+        setting = await self.session.get(SystemSetting, key)
+        if setting is None:
+            return default
+        return setting.value.get("value", default)
+
+    async def set_system_setting(self, key: str, value: Any) -> None:
+        setting = await self.session.get(SystemSetting, key)
+        if setting is None:
+            setting = SystemSetting(key=key, value={"value": value})
+            self.session.add(setting)
+        else:
+            setting.value = {"value": value}
+        await self.session.flush()
+
+    async def get_admin_session(self, telegram_user_id: int) -> AdminSession | None:
+        return await self.session.get(AdminSession, telegram_user_id)
+
+    async def set_admin_session(
+        self, telegram_user_id: int, state: str, payload: dict[str, Any] | None = None
+    ) -> None:
+        session = await self.session.get(AdminSession, telegram_user_id)
+        if session is None:
+            session = AdminSession(
+                telegram_user_id=telegram_user_id,
+                state=state,
+                payload=payload or {},
+            )
+            self.session.add(session)
+        else:
+            session.state = state
+            session.payload = payload or {}
+        await self.session.flush()
+
+    async def clear_admin_session(self, telegram_user_id: int) -> None:
+        session = await self.session.get(AdminSession, telegram_user_id)
+        if session is not None:
+            await self.session.delete(session)
+            await self.session.flush()
+
+    async def list_channels(self, limit: int = 50) -> list[ManagedChannel]:
+        return list(
+            await self.session.scalars(
+                select(ManagedChannel).order_by(desc(ManagedChannel.updated_at)).limit(limit)
+            )
+        )
+
+    async def get_channel(self, channel_id: int) -> ManagedChannel | None:
+        return await self.session.get(ManagedChannel, channel_id)
+
+    async def add_channel(self, telegram_chat_id: int, title: str | None = None) -> ManagedChannel:
+        channel = await self.session.scalar(
+            select(ManagedChannel).where(ManagedChannel.telegram_chat_id == telegram_chat_id)
+        )
+        if channel is None:
+            channel = ManagedChannel(telegram_chat_id=telegram_chat_id, title=title)
+            self.session.add(channel)
+        elif title:
+            channel.title = title
+        await self.session.flush()
+        return channel
+
+    async def delete_channel(self, channel_id: int) -> bool:
+        channel = await self.session.get(ManagedChannel, channel_id)
+        if channel is None:
+            return False
+        await self.session.delete(channel)
+        await self.session.flush()
+        return True
+
+    async def dashboard_stats(self) -> dict[str, int]:
+        now = datetime.now(UTC)
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        messages_today = await self.session.scalar(
+            select(func.count(Message.id)).where(Message.telegram_date >= start)
+        )
+        ai_today = await self.session.scalar(
+            select(func.count(AIRequest.id)).where(AIRequest.created_at >= start)
+        )
+        errors_today = await self.session.scalar(
+            select(func.count(AuditLog.id)).where(
+                AuditLog.created_at >= start,
+                AuditLog.result.in_(("failed", "blocked")),
+            )
+        )
+        active_chats = await self.session.scalar(
+            select(func.count(Chat.id))
+            .join(ChatSettings, ChatSettings.chat_id == Chat.id)
+            .where(ChatSettings.enabled.is_(True), ChatSettings.blocked.is_(False))
+        )
+        return {
+            "messages_today": int(messages_today or 0),
+            "ai_today": int(ai_today or 0),
+            "errors_today": int(errors_today or 0),
+            "active_chats": int(active_chats or 0),
+        }
+
+    async def recent_audits(self, limit: int = 10) -> list[AuditLog]:
+        return list(
+            await self.session.scalars(
+                select(AuditLog).order_by(desc(AuditLog.created_at)).limit(limit)
+            )
+        )
 
     async def recent_messages(self, limit: int = 30) -> list[Message]:
         return list(

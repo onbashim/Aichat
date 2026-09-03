@@ -87,7 +87,48 @@ class ConversationOrchestrator:
             return
         memory = MemoryService(repo, self.event_bus)
         memory_context = await memory.context_for_chat(chat.id) if settings.memory_enabled else ""
+
+        get_system_setting = getattr(repo, "get_system_setting", None)
+        if get_system_setting is None:
+            global_tone = "natural"
+            global_language = "auto"
+            response_length = "medium"
+            global_prompt_enabled = True
+            global_prompt = ""
+            ai_automation_enabled = self.settings.ai_automation_enabled
+            autopilot_enabled = self.settings.autopilot_enabled
+        else:
+            global_tone = await get_system_setting("ai_tone", "natural")
+            global_language = await get_system_setting("ai_language", "auto")
+            response_length = await get_system_setting("ai_length", "medium")
+            global_prompt_enabled = await get_system_setting("global_prompt_enabled", True)
+            global_prompt = (
+                await get_system_setting("global_prompt", "")
+                if global_prompt_enabled
+                else ""
+            )
+            ai_automation_enabled = await get_system_setting(
+                "ai_automation_enabled", self.settings.ai_automation_enabled
+            )
+            autopilot_enabled = await get_system_setting(
+                "autopilot_enabled", self.settings.autopilot_enabled
+            )
+        effective_tone = settings.tone if settings.tone != "natural" else str(global_tone)
+        effective_language = (
+            settings.language if settings.language != "auto" else str(global_language)
+        )
+        prompts = [item for item in (global_prompt, settings.custom_prompt) if item]
+        effective_prompt = "\n\n".join(str(item) for item in prompts) or None
         try:
+            if settings.mode == ChatMode.MANUAL.value:
+                await repo.add_audit(
+                    trace_id=trace_id,
+                    chat_id=chat.id,
+                    mode=settings.mode,
+                    action="manual_message_stored",
+                    result="success",
+                )
+                return
             if settings.mode == ChatMode.GHOST.value:
                 result = await self.ai.analyze_message(text, trace_id=trace_id)
                 await repo.add_ai_request(
@@ -110,10 +151,11 @@ class ConversationOrchestrator:
             result = await self.ai.draft_reply(
                 text,
                 trace_id=trace_id,
-                tone=settings.tone,
-                language=settings.language,
-                custom_prompt=settings.custom_prompt,
+                tone=effective_tone,
+                language=effective_language,
+                custom_prompt=effective_prompt,
                 memory_context=memory_context,
+                response_length=str(response_length),
             )
             await repo.add_ai_request(
                 trace_id=trace_id,
@@ -137,9 +179,42 @@ class ConversationOrchestrator:
                     },
                 )
                 can_reply = BusinessPermissions.from_rights(connection.rights).can_reply
-                notice = f"Copilot draft for chat {chat.telegram_chat_id}:\n\n{result.text}\n\nAction: {action.id}\nSend permission: {'yes' if can_reply else 'no'}\nApprove: تایید {action.id}\nReject: رد {action.id}"
+                notice = (
+                    f"🤖 پیشنهاد پاسخ AI\n\n{result.text}\n\n"
+                    f"Chat ID: {chat.telegram_chat_id}\n"
+                    f"مجوز ارسال: {'✅' if can_reply else '❌'}"
+                )
                 if self.settings.telegram_owner_id:
-                    await self.telegram.send_bot_message(self.settings.telegram_owner_id, notice)
+                    markup = {
+                        "inline_keyboard": [
+                            [
+                                {
+                                    "text": "✅ ارسال",
+                                    "callback_data": f"action:approve:{action.id}",
+                                },
+                                {
+                                    "text": "✏️ ویرایش",
+                                    "callback_data": f"action:edit:{action.id}",
+                                },
+                                {
+                                    "text": "❌ رد",
+                                    "callback_data": f"action:reject:{action.id}",
+                                },
+                            ]
+                        ]
+                    }
+                    try:
+                        await self.telegram.send_bot_message(
+                            self.settings.telegram_owner_id,
+                            notice,
+                            reply_markup=markup,
+                        )
+                    except TypeError:
+                        # Backward-compatible adapter path for legacy Telegram clients.
+                        await self.telegram.send_bot_message(
+                            self.settings.telegram_owner_id,
+                            notice,
+                        )
                 await repo.add_audit(
                     trace_id=trace_id,
                     chat_id=chat.id,
@@ -153,8 +228,8 @@ class ConversationOrchestrator:
                 decision = can_autopilot(
                     settings,
                     connection,
-                    ai_automation_enabled=self.settings.ai_automation_enabled,
-                    autopilot_enabled=self.settings.autopilot_enabled,
+                    ai_automation_enabled=bool(ai_automation_enabled),
+                    autopilot_enabled=bool(autopilot_enabled),
                 )
                 if not decision.allowed:
                     await repo.add_audit(

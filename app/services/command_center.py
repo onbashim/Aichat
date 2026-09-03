@@ -34,7 +34,7 @@ class CommandCenter:
                 "Telegram AI OS آماده است.\n\n"
                 "دستورهای مدیریت:\n"
                 "وضعیت\n"
-                "حالت 123456 ghost\n"
+                "حالت 123456 manual\n"
                 "حالت 123456 copilot\n"
                 "حالت 123456 autopilot\n"
                 "اتو ریپلای 123456 روشن\n"
@@ -57,7 +57,7 @@ class CommandCenter:
                     "Business Connection فعال برای این اکانت پیدا نشد. "
                     "اتصال Telegram Business را یک‌بار قطع و وصل کن."
                 )
-            if command.mode not in {"ghost", "copilot", "autopilot"}:
+            if command.mode not in {"manual", "ghost", "copilot", "autopilot"}:
                 return "Mode نامعتبر است."
             chat.settings.mode = command.mode
             if command.mode != "autopilot":

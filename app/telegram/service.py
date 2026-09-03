@@ -26,15 +26,15 @@ class TelegramUpdateService:
         event_bus: EventBus,
         orchestrator: ConversationOrchestrator,
         command_center: CommandCenter,
-        admin_panel: AdminPanel,
         owner_auth: OwnerAuthenticationMiddleware,
+        admin_panel: AdminPanel | None = None,
     ) -> None:
         self.settings = settings
         self.telegram = telegram
         self.event_bus = event_bus
         self.orchestrator = orchestrator
         self.command_center = command_center
-        self.admin_panel = admin_panel
+        self.admin_panel = admin_panel or AdminPanel(settings, telegram)
         self.owner_auth = owner_auth
 
     async def process(self, repo: CoreRepository, update: ParsedUpdate) -> None:
@@ -96,11 +96,55 @@ class TelegramUpdateService:
                 )
             return
         if text.strip().casefold() in {"/start", "start", "/menu", "menu", "پنل", "منو"}:
+            await repo.clear_admin_session(int(sender_id))
             panel_text, markup = self.admin_panel.home()
             await self.telegram.send_bot_message(
                 int(chat["id"]), panel_text, reply_markup=markup
             )
             return
+
+        session = await repo.get_admin_session(int(sender_id))
+        if session is not None and session.state == "awaiting_action_edit":
+            action_id = str(session.payload.get("action_id", ""))
+            action = await repo.get_action(action_id)
+            if action is None:
+                await repo.clear_admin_session(int(sender_id))
+                await self.telegram.send_bot_message(int(chat["id"]), "Action پیدا نشد.")
+                return
+            if action.status != "pending":
+                await repo.clear_admin_session(int(sender_id))
+                await self.telegram.send_bot_message(
+                    int(chat["id"]), f"این Action در وضعیت {action.status} است."
+                )
+                return
+            action.payload = {**action.payload, "text": text.strip()}
+            await repo.session.flush()
+            await repo.clear_admin_session(int(sender_id))
+            markup = {
+                "inline_keyboard": [
+                    [
+                        {"text": "✅ ارسال", "callback_data": f"action:approve:{action.id}"},
+                        {"text": "✏️ ویرایش", "callback_data": f"action:edit:{action.id}"},
+                        {"text": "❌ رد", "callback_data": f"action:reject:{action.id}"},
+                    ]
+                ]
+            }
+            await self.telegram.send_bot_message(
+                int(chat["id"]),
+                f"پیشنهاد ویرایش‌شده AI:\n\n{text.strip()}",
+                reply_markup=markup,
+            )
+            return
+
+        handled, panel_text, markup = await self.admin_panel.handle_input(
+            repo, int(sender_id), text
+        )
+        if handled:
+            await self.telegram.send_bot_message(
+                int(chat["id"]), panel_text, reply_markup=markup
+            )
+            return
+
         response = await self.command_center.handle(repo, text)
         await self.telegram.send_bot_message(int(chat["id"]), response)
 
@@ -125,7 +169,32 @@ class TelegramUpdateService:
                 await self.telegram.answer_callback_query(callback_id)
             return
 
-        text, markup = await self.admin_panel.render_callback(repo, data)
+        if data.startswith("action:"):
+            parts = data.split(":", 2)
+            if len(parts) == 3:
+                action_kind, action_id = parts[1], parts[2]
+                if action_kind == "edit":
+                    await repo.set_admin_session(
+                        int(sender_id), "awaiting_action_edit", {"action_id": action_id}
+                    )
+                    text = "✏️ ویرایش پاسخ AI\n\nمتن جدید را ارسال کن.\nبرای لغو: «لغو»"
+                    markup = {
+                        "inline_keyboard": [
+                            [{"text": "⬅️ بازگشت", "callback_data": "admin:home"}]
+                        ]
+                    }
+                elif action_kind in {"approve", "reject"}:
+                    command = ("تایید " if action_kind == "approve" else "رد ") + action_id
+                    text = await self.command_center.handle(repo, command)
+                    markup = {"inline_keyboard": [[{"text": "⬅️ پنل", "callback_data": "admin:home"}]]}
+                else:
+                    text, markup = self.admin_panel.home()
+            else:
+                text, markup = self.admin_panel.home()
+        else:
+            text, markup = await self.admin_panel.render_callback(
+                repo, data, owner_id=int(sender_id)
+            )
         if callback_id:
             await self.telegram.answer_callback_query(callback_id)
         try:
