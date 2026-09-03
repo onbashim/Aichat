@@ -19,6 +19,7 @@ from app.events.bus import EventBus
 from app.plugins.builtin import future_plugins
 from app.plugins.manager import PluginManager
 from app.repositories.core import CoreRepository
+from app.services.admin_panel import AdminPanel
 from app.services.command_center import CommandCenter
 from app.services.orchestrator import ConversationOrchestrator
 from app.telegram.client import TelegramBotAPI
@@ -79,9 +80,10 @@ async def build_container(settings: Settings) -> Container:
             rate_limiter=limiter,
         )
         command_center = CommandCenter(settings, ai, telegram)
+        admin_panel = AdminPanel(settings, telegram)
         owner_auth = OwnerAuthenticationMiddleware(
             owner_id=settings.telegram_owner_id,
-            admin_ids=settings.admin_ids,
+            admin_ids=set(),
             rate_limiter=SlidingWindowRateLimiter(
                 settings.owner_rate_limit_requests,
                 settings.owner_rate_limit_window_seconds,
@@ -93,6 +95,7 @@ async def build_container(settings: Settings) -> Container:
             event_bus=event_bus,
             orchestrator=orchestrator,
             command_center=command_center,
+            admin_panel=admin_panel,
             owner_auth=owner_auth,
         )
 
