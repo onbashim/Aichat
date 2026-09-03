@@ -7,6 +7,7 @@ from app.events.bus import EventBus
 from app.events.types import Event, EventNames
 from app.permissions.service import BusinessPermissions
 from app.repositories.core import CoreRepository
+from app.services.admin_panel import AdminPanel
 from app.services.command_center import CommandCenter
 from app.services.orchestrator import ConversationOrchestrator
 from app.telegram.client import TelegramBotAPI
@@ -25,6 +26,7 @@ class TelegramUpdateService:
         event_bus: EventBus,
         orchestrator: ConversationOrchestrator,
         command_center: CommandCenter,
+        admin_panel: AdminPanel,
         owner_auth: OwnerAuthenticationMiddleware,
     ) -> None:
         self.settings = settings
@@ -32,6 +34,7 @@ class TelegramUpdateService:
         self.event_bus = event_bus
         self.orchestrator = orchestrator
         self.command_center = command_center
+        self.admin_panel = admin_panel
         self.owner_auth = owner_auth
 
     async def process(self, repo: CoreRepository, update: ParsedUpdate) -> None:
@@ -72,6 +75,9 @@ class TelegramUpdateService:
             )
             await self.event_bus.publish(Event(EventNames.TELEGRAM_MESSAGES_DELETED, payload))
             return
+        if update.kind == "callback_query":
+            await self._handle_callback_query(repo, update.payload)
+            return
         if update.kind == "message":
             await self._handle_bot_message(repo, update.payload)
 
@@ -89,5 +95,39 @@ class TelegramUpdateService:
                     else "این ربات خصوصی است.",
                 )
             return
+        if text.strip().casefold() in {"/start", "start", "/menu", "menu", "پنل", "منو"}:
+            panel_text, markup = self.admin_panel.home()
+            await self.telegram.send_bot_message(
+                int(chat["id"]), panel_text, reply_markup=markup
+            )
+            return
         response = await self.command_center.handle(repo, text)
         await self.telegram.send_bot_message(int(chat["id"]), response)
+
+    async def _handle_callback_query(self, repo: CoreRepository, payload: dict) -> None:
+        callback_id = str(payload.get("id", ""))
+        sender_id = (payload.get("from") or {}).get("id")
+        auth = await self.owner_auth.authorize(sender_id)
+        if not auth.allowed:
+            if callback_id:
+                await self.telegram.answer_callback_query(
+                    callback_id, text="دسترسی ندارید.", show_alert=True
+                )
+            return
+
+        message = payload.get("message") or {}
+        chat = message.get("chat") or {}
+        chat_id = chat.get("id")
+        message_id = message.get("message_id")
+        data = str(payload.get("data") or "admin:home")
+        if chat_id is None or message_id is None:
+            if callback_id:
+                await self.telegram.answer_callback_query(callback_id)
+            return
+
+        text, markup = await self.admin_panel.render_callback(repo, data)
+        if callback_id:
+            await self.telegram.answer_callback_query(callback_id)
+        await self.telegram.edit_bot_message(
+            int(chat_id), int(message_id), text, reply_markup=markup
+        )
