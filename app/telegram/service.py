@@ -26,15 +26,15 @@ class TelegramUpdateService:
         event_bus: EventBus,
         orchestrator: ConversationOrchestrator,
         command_center: CommandCenter,
-        admin_panel: AdminPanel,
         owner_auth: OwnerAuthenticationMiddleware,
+        admin_panel: AdminPanel | None = None,
     ) -> None:
         self.settings = settings
         self.telegram = telegram
         self.event_bus = event_bus
         self.orchestrator = orchestrator
         self.command_center = command_center
-        self.admin_panel = admin_panel
+        self.admin_panel = admin_panel or AdminPanel(settings, telegram)
         self.owner_auth = owner_auth
 
     async def process(self, repo: CoreRepository, update: ParsedUpdate) -> None:
