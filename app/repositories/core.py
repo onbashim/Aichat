@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import desc, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database.models import (
     Action,
@@ -77,7 +78,9 @@ class CoreRepository:
     async def ensure_chat(self, connection_id: str, payload: dict[str, Any]) -> Chat:
         telegram_chat_id = int(payload["id"])
         chat = await self.session.scalar(
-            select(Chat).where(
+            select(Chat)
+            .options(selectinload(Chat.settings))
+            .where(
                 Chat.business_connection_id == connection_id,
                 Chat.telegram_chat_id == telegram_chat_id,
             )
