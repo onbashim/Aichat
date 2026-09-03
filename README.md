@@ -4,7 +4,7 @@ Telegram AI OS is a modular, event-driven AI personal-assistant backend for Tele
 single protected Owner and Telegram Business Connected Bot / Chat Automation workflows, with a fail-closed
 Autopilot policy and a plugin architecture for future capabilities.
 
-**Current application version:** `0.1.0`  
+**Current application version:** `0.2.0`  
 **Target runtime:** Python 3.12+  
 **Telegram implementation baseline:** Bot API 10.3 (Business Connection + Business Message updates)
 
