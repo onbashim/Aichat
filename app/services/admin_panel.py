@@ -128,7 +128,7 @@ class AdminPanel:
         return text, _keyboard(
             [
                 [
-                    _button("Ghost", f"admin:mode:{chat.id}:ghost"),
+                    _button("Manual", f"admin:mode:{chat.id}:manual"),
                     _button("Copilot", f"admin:mode:{chat.id}:copilot"),
                     _button("Autopilot", f"admin:mode:{chat.id}:autopilot"),
                 ],
