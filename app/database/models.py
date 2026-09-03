@@ -212,6 +212,29 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
+class SystemSetting(TimestampMixin, Base):
+    __tablename__ = "system_settings"
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    value: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class AdminSession(TimestampMixin, Base):
+    __tablename__ = "admin_sessions"
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    state: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class ManagedChannel(TimestampMixin, Base):
+    __tablename__ = "managed_channels"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    telegram_chat_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)
+    title: Mapped[str | None] = mapped_column(String(255))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    ai_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    custom_prompt: Mapped[str | None] = mapped_column(Text)
+
+
 class ProcessedUpdate(Base):
     __tablename__ = "processed_updates"
     update_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
