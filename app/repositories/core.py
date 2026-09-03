@@ -131,6 +131,57 @@ class CoreRepository:
             )
         )
 
+    async def search_chats(self, query: str, limit: int = 20) -> list[Chat]:
+        cleaned = query.strip()
+        conditions = []
+        if cleaned.lstrip("-").isdigit():
+            conditions.append(Chat.telegram_chat_id == int(cleaned))
+        pattern = f"%{cleaned}%"
+        conditions.extend(
+            [
+                Chat.title.ilike(pattern),
+                Chat.first_name.ilike(pattern),
+                Chat.last_name.ilike(pattern),
+                Chat.username.ilike(pattern),
+            ]
+        )
+        return list(
+            await self.session.scalars(
+                select(Chat)
+                .options(selectinload(Chat.settings))
+                .where(*([conditions[0]] if len(conditions) == 1 else []))
+                .order_by(desc(Chat.updated_at))
+                .limit(limit)
+            )
+        ) if len(conditions) == 1 else list(
+            await self.session.scalars(
+                select(Chat)
+                .options(selectinload(Chat.settings))
+                .where(
+                    conditions[0]
+                    | conditions[1]
+                    | conditions[2]
+                    | conditions[3]
+                    | conditions[4]
+                    if len(conditions) == 5
+                    else conditions[0]
+                    | conditions[1]
+                    | conditions[2]
+                    | conditions[3]
+                )
+                .order_by(desc(Chat.updated_at))
+                .limit(limit)
+            )
+        )
+
+    async def delete_chat(self, chat_id: int) -> bool:
+        chat = await self.get_chat_with_settings(chat_id)
+        if chat is None:
+            return False
+        await self.session.delete(chat)
+        await self.session.flush()
+        return True
+
     async def save_message(self, chat: Chat, payload: dict[str, Any], *, direction: str) -> Message:
         existing = await self.session.scalar(
             select(Message).where(
