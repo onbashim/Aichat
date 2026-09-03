@@ -23,6 +23,7 @@ from app.database.base import Base, TimestampMixin
 
 
 class ChatMode(str, enum.Enum):
+    MANUAL = "manual"
     GHOST = "ghost"
     COPILOT = "copilot"
     AUTOPILOT = "autopilot"
