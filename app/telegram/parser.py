@@ -9,6 +9,7 @@ UpdateKind = Literal[
     "business_message",
     "edited_business_message",
     "deleted_business_messages",
+    "callback_query",
     "unknown",
 ]
 
@@ -26,6 +27,7 @@ class TelegramUpdateParser:
         "business_message",
         "edited_business_message",
         "deleted_business_messages",
+        "callback_query",
         "message",
     )
 
