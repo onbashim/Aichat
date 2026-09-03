@@ -38,11 +38,13 @@ class AIEngine:
         custom_prompt: str | None = None,
         memory_context: str | None = None,
         response_length: str = "medium",
+        creativity: str = "medium",
     ) -> AIResult:
         context = [
             f"Tone: {tone}",
             f"Language: {language}",
             f"Response length: {response_length}",
+            f"Creativity: {creativity}",
         ]
         if custom_prompt:
             context.append(f"Owner instruction: {custom_prompt}")
