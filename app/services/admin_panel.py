@@ -479,11 +479,12 @@ class AdminPanel:
                     _keyboard([[_button("⬅️ بازگشت", "admin:chats")]]),
                 )
             if chat.settings is not None:
+                memory_default = await repo.get_system_setting("memory_default", True)
                 chat.settings.enabled = True
                 chat.settings.mode = ChatMode.AUTOPILOT.value
                 chat.settings.auto_reply = True
                 chat.settings.requires_approval = False
-                chat.settings.memory_enabled = True
+                chat.settings.memory_enabled = bool(memory_default)
                 await repo.session.flush()
             await repo.clear_admin_session(telegram_user_id)
             await repo.add_audit(
