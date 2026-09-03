@@ -128,6 +128,13 @@ class TelegramUpdateService:
         text, markup = await self.admin_panel.render_callback(repo, data)
         if callback_id:
             await self.telegram.answer_callback_query(callback_id)
-        await self.telegram.edit_bot_message(
-            int(chat_id), int(message_id), text, reply_markup=markup
-        )
+        try:
+            await self.telegram.edit_bot_message(
+                int(chat_id), int(message_id), text, reply_markup=markup
+            )
+        except Exception:
+            logger.exception(
+                "admin panel message edit failed callback=%s data=%s",
+                callback_id,
+                data,
+            )
